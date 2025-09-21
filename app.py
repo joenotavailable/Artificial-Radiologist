@@ -11,7 +11,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app = Flask(__name__)
 CORS(app)
 
-model = YOLO(r"/Users/me/AI_testzone/HACKATHON/Bone-Fracture-Detection-main/yolov8n-fracture.pt")
+model = YOLO("yolov8n-fracture.pt")
 os.makedirs("uploads", exist_ok=True)
 
 @app.route("/", methods=["GET"])
