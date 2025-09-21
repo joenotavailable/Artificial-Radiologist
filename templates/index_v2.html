@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bone Fracture Detector</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    /* --- REDESIGNED UI WITH NEW COLOR PALETTE --- */
+    body {
+      margin: 0;
+      padding: 20px;
+      font-family: 'Segoe UI', sans-serif;
+      /* Primary (Trust & Calm): Gradient background */
+      background: linear-gradient(to bottom, #5AB9EA, #F8FAFB);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      /* Secondary (Clarity & Support): Clean base */
+      background: #F8FAFB;
+      padding: 30px 40px;
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(46, 58, 70, 0.15); /* Softer shadow with Charcoal tones */
+      width: 100%;
+      max-width: 520px;
+      text-align: center;
+      animation: fadeIn 0.6s ease-in-out;
+    }
+
+    h1 {
+      /* Typography & Contrast: Softer headings */
+      color: #506D85;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"] {
+      margin: 20px 0;
+      padding: 12px;
+      /* Secondary (Clarity & Support): Neutral border */
+      border: 1px solid #A7B1B7;
+      border-radius: 8px;
+      background-color: #FFFFFF;
+      width: 95%;
+      cursor: pointer;
+    }
+
+    button {
+      /* Primary (Trust & Calm): Main action color */
+      background: #2CA6A4;
+      color: #fff;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+    button:hover {
+      background: #248b89; /* Darker Teal */
+      transform: translateY(-2px);
+    }
+    
+    #preview-container {
+      position: relative; 
+      display: inline-block; 
+      margin-top: 25px;
+      max-width: 100%;
+      /* Important: Set a fixed aspect ratio or max-height for consistent canvas alignment */
+      /* For example, if your images are mostly horizontal, you might set a max-height */
+      max-height: 360px; /* Limits the height of the container */
+      width: 100%; /* Allows the container to take full width */
+      display: flex; /* Use flexbox to center the image within the container */
+      justify-content: center;
+      align-items: center;
+      background-color: #f0f0f0; /* Optional: background for letterboxing */
+      border-radius: 10px;
+    }
+
+    #preview {
+      display: block;
+      max-width: 100%;
+      max-height: 100%; /* Max height of its parent container */
+      /* object-fit: contain is critical for consistent scaling */
+      object-fit: contain; 
+      border: 2px solid #A7B1B7;
+      border-radius: 10px;
+      /* Remove margin-left/right auto as flexbox handles centering */
+      height: auto; /* Ensures image scales proportionally */
+      width: auto; /* Ensures image scales proportionally */
+    }
+    
+    #canvas {
+      position: absolute; 
+      top: 0; 
+      left: 0;
+      /* Ensure canvas covers the entire container, then we'll scale drawing inside */
+      width: 100%; 
+      height: 100%;
+      pointer-events: none; /* Allows clicks to pass through to the image */
+    }
+
+    #result {
+      margin-top: 20px;
+      font-size: 16px;
+      min-height: 24px;
+      text-align: left;
+      /* Typography & Contrast: Strong contrast for text */
+      color: #2E3A46;
+    }
+
+    #result h3 {
+      margin-top: 15px;
+      margin-bottom: 5px;
+      /* Primary (Trust & Calm): Title color matches main button */
+      color: #2CA6A4;
+    }
+    
+    #result p {
+      margin-top: 0;
+      line-height: 1.6;
+    }
+
+    .spinner i {
+      font-size: 32px;
+      animation: spin 1s linear infinite;
+      /* Primary (Trust & Calm): Spinner matches action color */
+      color: #2CA6A4;
+    }
+    .spinner { margin-top: 20px; display: none; }
+
+    #download-btn {
+      display: none;
+      margin-top: 20px;
+      /* Accent (Action & Energy): Positive action button */
+      background-color: #3BB273;
+    }
+    #download-btn:hover {
+      background: #329a65; /* Darker Emerald Green */
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes spin {
+      0%   { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1><i class="fas fa-x-ray"></i> Bone Fracture Detection</h1>
+
+    <form id="upload-form" enctype="multipart/form-data">
+      <input type="file" name="image" id="image-input" accept="image/*" required>
+      <br>
+      <button type="submit"><i class="fas fa-magnifying-glass-chart"></i> Detect Fracture</button>
+    </form>
+
+    <div class="spinner" id="spinner">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p style="color: #506D85;">Processing...</p>
+    </div>
+
+    <div id="preview-container">
+        <img
+            id="preview"
+            src="https://placehold.co/400x300?text=Upload+X-ray+Image"
+            alt="Upload preview"
+        >
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="result">Prediction results will appear here.</div>
+
+    <button id="download-btn"><i class="fas fa-download"></i> Download Report</button>
+  </div>
+
+  <script>
+    const form       = document.getElementById('upload-form');
+    const input      = document.getElementById('image-input');
+    const preview    = document.getElementById('preview');
+    const spinner    = document.getElementById('spinner');
+    const resultDiv  = document.getElementById('result');
+    const downloadBtn= document.getElementById('download-btn');
+    const canvas     = document.getElementById('canvas');
+    const ctx        = canvas.getContext('2d');
+    
+    const ACCENT_COLOR_ALERT = "#FF6B6B"; 
+    const ACCENT_COLOR_SUCCESS = "#3BB273";
+
+    const fractureInfo = {
+      "0": { "name": "Comminuted", "description": "A comminuted fracture occurs when the bone breaks into multiple fragments, often due to high-impact trauma. These fractures are unstable and usually require surgical intervention, such as plates, screws, or rods to stabilize the fragments. Recovery may involve immobilization followed by physical therapy to restore strength and mobility. Healing time is longer compared to simple fractures, and careful monitoring is necessary to avoid misalignment or delayed union." },
+      "1": { "name": "Greenstick", "description": "A greenstick fracture is a partial fracture where the bone bends and cracks without completely breaking, typically seen in children due to their flexible bones. Treatment usually involves casting or splinting to immobilize the bone while it heals. Gentle manipulation may be needed to align the bone. These fractures generally heal well and faster than adult fractures, but follow-up X-rays ensure proper bone remodeling and avoid deformities." },
+      "2": { "name": "Healthy", "description": "A 'healthy' classification indicates no fracture or bone abnormalities are present on the X-ray. Bones appear intact with no visible cracks or displacement, meaning the skeletal system is normal. No orthopedic treatment is required. If symptoms exist, doctors may investigate soft tissue injuries or other conditions. Routine monitoring or follow-up may be suggested, but overall, a healthy X-ray confirms the bone is stable and functional." },
+      "3": { "name": "Linear", "description": "A linear fracture is a thin crack along the bone’s length, often caused by low-to-moderate trauma. The bone remains aligned and stable. Treatment usually includes immobilization with a cast or splint. Doctors may recommend pain management and limited movement. Physical therapy may follow to regain strength and flexibility. Healing is typically straightforward, but observation ensures the fracture does not widen or become more complicated." },
+      "5": { "name": "Oblique", "description": "Oblique fractures occur at an angled break across the bone, usually from a sharp angled force. They are less stable than linear fractures and may require casting or surgical fixation with screws or plates if displaced. Recovery involves immobilization, gradual weight-bearing, and physical therapy. Close monitoring ensures proper bone healing and alignment, preventing long-term deformities or functional issues in the affected limb." },
+      "4": { "name": "Oblique Displaced", "description": "An oblique displaced fracture is an angled break where the bone fragments are not aligned properly. This type usually requires surgical intervention to realign and stabilize the bone using screws or plates. Post-surgery, a cast or brace may be used, followed by physical therapy to restore motion and strength. Healing takes longer than simple fractures, and careful monitoring is necessary to prevent malunion, chronic pain, or decreased mobility." },
+      "6": { "name": "Segmental", "description": "Segmental fractures involve two or more separate breaks along the same bone, creating isolated segments. These fractures are unstable and often result from high-energy trauma. Surgical fixation with plates, rods, or external devices is usually required. Recovery includes immobilization and extensive physical therapy. Healing is complex, with a risk of nonunion or malalignment, so frequent X-rays and monitoring are necessary to ensure proper alignment and long-term mobility." },
+      "7": { "name": "Spiral", "description": "A spiral fracture twists around the bone, usually caused by a rotational force. Common in sports injuries or accidents involving twisting. Treatment may involve casting or surgical fixation depending on displacement. Immobilization, pain management, and physical therapy are important. Rotational misalignment can impair function if not corrected, so careful assessment and follow-up are needed. Healing time varies, but proper stabilization generally allows bones to mend with minimal long-term complications." },
+      "9": { "name": "Transverse", "description": "A transverse fracture is a straight horizontal break across the bone, often caused by a direct blow. These fractures are generally stable and may heal well with casting or splinting. Surgery is only required if the fracture is displaced. Recovery involves immobilization for several weeks and gradual rehabilitation. Proper alignment and follow-up X-rays ensure complete healing. Transverse fractures are easier to manage and usually have predictable recovery outcomes." },
+      "8": { "name": "Transverse Displaced", "description": "A transverse displaced fracture is a horizontal break where the bone fragments have shifted out of alignment, making it unstable. Treatment typically requires surgical fixation to realign the bone, followed by immobilization. Pain management and physical therapy are essential for regaining strength and mobility. Close monitoring ensures proper healing and prevents complications such as malunion or chronic stiffness. Recovery takes longer than non-displaced fractures." }
+    };
+    
+    let reportContent = "";
+
+    // IMPORTANT: Call this function when the image is fully loaded and rendered
+    function setupCanvasForImage() {
+        const img = preview;
+        // Only proceed if the image has natural dimensions (i.e., it's loaded)
+        if (img.naturalWidth && img.naturalHeight) {
+            canvas.width = img.clientWidth;
+            canvas.height = img.clientHeight;
+
+            // Clear any previous drawings
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    }
+
+    // When the user selects a new file
+    input.addEventListener('change', function () {
+        const file = this.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                preview.src = e.target.result;
+                resultDiv.innerHTML = 'Prediction results will appear here.';
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas immediately
+                downloadBtn.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            preview.src = "https://placehold.co/400x300?text=Upload+X-ray+Image";
+            // Clear canvas when no image is selected
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    });
+
+    // When the preview image *finishes loading and rendering*
+    preview.addEventListener('load', setupCanvasForImage);
+    // Also, initially set up canvas if a placeholder/default image is present
+    document.addEventListener('DOMContentLoaded', setupCanvasForImage);
+
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      const formData = new FormData(form);
+      
+      resultDiv.innerHTML = '';
+      spinner.style.display = 'block';
+      downloadBtn.style.display = 'none';
+      ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas before new drawing
+
+      fetch("http://127.0.0.1:5000/predict", {
+        method: "POST",
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        spinner.style.display = 'none';
+
+        if (data.error) {
+          resultDiv.innerHTML = `❌ Error: ${data.error}`;
+          resultDiv.style.color = ACCENT_COLOR_ALERT;
+          reportContent = `Error: ${data.error}`;
+        } else if (data.predictions && data.predictions.length > 0) {
+          reportContent = "";
+
+          const img = preview;
+          if (!img.naturalWidth || !img.naturalHeight) {
+              // This case should ideally not happen if 'load' listener works, but as a fallback
+              console.warn("Image natural dimensions not available. Bounding boxes may be inaccurate.");
+              resultDiv.innerHTML = `❌ Error: Image not fully loaded. Please try again.`;
+              resultDiv.style.color = ACCENT_COLOR_ALERT;
+              return;
+          }
+
+          // Calculate scaling factors and offsets
+          const scaleFactor = Math.min(img.clientWidth / img.naturalWidth, img.clientHeight / img.naturalHeight);
+          const scaledWidth = img.naturalWidth * scaleFactor;
+          const scaledHeight = img.naturalHeight * scaleFactor;
+
+          const offsetX = (img.clientWidth - scaledWidth) / 2;
+          const offsetY = (img.clientHeight - scaledHeight) / 2;
+          
+          data.predictions.forEach(pred => {
+            const classIndex = pred.class;
+            const info = fractureInfo[classIndex];
+
+            if (info) {
+              const predictionHtml = `
+                <div>
+                  <h3>${info.name} (${(pred.confidence * 100).toFixed(1)}%)</h3>
+                  <p>${info.description}</p>
+                </div>
+              `;
+              resultDiv.innerHTML += predictionHtml;
+              reportContent += `Detection: ${info.name}\nConfidence: ${(pred.confidence * 100).toFixed(1)}%\nDescription: ${info.description}\n\n`;
+              
+              const label = `${info.name} (${(pred.confidence * 100).toFixed(1)}%)`;
+
+              // --- Bounding Box Drawing Logic FIX ---
+              // Transform coordinates from original image space to displayed image space on canvas
+              const x1_scaled = pred.x1 * scaleFactor + offsetX;
+              const y1_scaled = pred.y1 * scaleFactor + offsetY;
+              const x2_scaled = pred.x2 * scaleFactor + offsetX;
+              const y2_scaled = pred.y2 * scaleFactor + offsetY;
+
+              ctx.strokeStyle = ACCENT_COLOR_ALERT; // Coral for bounding box
+              ctx.lineWidth = 2;
+              ctx.strokeRect(x1_scaled, y1_scaled, x2_scaled - x1_scaled, y2_scaled - y1_scaled);
+              
+              ctx.fillStyle = ACCENT_COLOR_ALERT; // Coral for label text
+              ctx.font = "bold 14px Arial";
+              // Adjust text position to ensure it's visible and above the box
+              const textX = x1_scaled;
+              const textY = y1_scaled > 20 ? y1_scaled - 5 : 20; // Ensure text is not clipped if box is at top
+              ctx.fillText(label, textX, textY);
+            }
+          });
+          downloadBtn.style.display = 'inline-block';
+        } else {
+          const healthyInfo = fractureInfo["2"];
+          resultDiv.innerHTML = `
+            <div style="text-align:center;">
+                <h3 style="color: ${ACCENT_COLOR_SUCCESS}; font-size: 1.2em;">✔️ ${healthyInfo.name}</h3>
+                <p style="text-align:left;">${healthyInfo.description}</p>
+            </div>`;
+          reportContent = `Result: ${healthyInfo.name}\nDescription: ${healthyInfo.description}`;
+          downloadBtn.style.display = 'inline-block';
+        }
+      })
+      .catch(err => {
+        spinner.style.display = 'none';
+        resultDiv.innerHTML = '❌ Prediction failed. Check the console for details.';
+        resultDiv.style.color = ACCENT_COLOR_ALERT;
+        console.error("Fetch Error:", err);
+      });
+    });
+
+    downloadBtn.addEventListener('click', function () {
+      const fullReport = `--- Bone Fracture Detection Report ---\nDate: ${new Date().toLocaleString()}\n\n${reportContent}`;
+      const blob = new Blob([fullReport], { type: 'text/plain' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'fracture_report.txt';
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+  </script>
+
+</body>
+</html>
